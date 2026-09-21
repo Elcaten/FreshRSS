@@ -49,6 +49,7 @@ class FreshRSS_View extends Minz_View {
 	public bool $load_ok;
 	public bool $onlyFeedsWithError;
 	public bool $signalError;
+	public string $urlToAdd;
 
 	// Manage users
 	/** @var array{feed_count:?int,article_count:?int,database_size:?int,language:string,mail_login:string,enabled:bool,is_admin:bool,last_user_activity:string,is_default:bool} */

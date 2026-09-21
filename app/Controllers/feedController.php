@@ -6,6 +6,20 @@ declare(strict_types=1);
  */
 class FreshRSS_feed_Controller extends FreshRSS_ActionController {
 	/**
+	 * @throws FreshRSS_FeedNotAdded_Exception
+	 */
+	private static function checkUrlBeforeAdd(string $url): string {
+		$url = trim($url);
+
+		/** @var string|null $urlHooked */
+		$urlHooked = Minz_ExtensionManager::callHook(Minz_HookType::CheckUrlBeforeAdd, $url);
+		if ($urlHooked === null) {
+			throw new FreshRSS_FeedNotAdded_Exception($url);
+		}
+		return $urlHooked;
+	}
+
+	/**
 	 * This action is called before every other action in that class. It is
 	 * the common boilerplate for every action. It is triggered by the
 	 * underlying framework.
@@ -44,14 +58,7 @@ class FreshRSS_feed_Controller extends FreshRSS_ActionController {
 
 		$catDAO = FreshRSS_Factory::createCategoryDao();
 
-		$url = trim($url);
-
-		/** @var string|null $urlHooked */
-		$urlHooked = Minz_ExtensionManager::callHook(Minz_HookType::CheckUrlBeforeAdd, $url);
-		if ($urlHooked === null) {
-			throw new FreshRSS_FeedNotAdded_Exception($url);
-		}
-		$url = $urlHooked;
+		$url = self::checkUrlBeforeAdd($url);
 
 		$cat = null;
 		if ($cat_id > 0) {
@@ -356,7 +363,14 @@ class FreshRSS_feed_Controller extends FreshRSS_ActionController {
 
 			$catDAO = FreshRSS_Factory::createCategoryDao();
 			$this->view->categories = $catDAO->listCategories(prePopulateFeeds: false);
-			$this->view->feed = new FreshRSS_Feed($url);
+			$url = trim($url);
+			try {
+				$urlHooked = self::checkUrlBeforeAdd($url);
+			} catch (FreshRSS_FeedNotAdded_Exception $e) {
+				Minz_Request::bad(_t('feedback.sub.feed.not_added', $e->url()), $url_redirect);
+				return;
+			}
+			$this->view->feed = new FreshRSS_Feed($urlHooked);
 			try {
 				// We try to get more information about the feed.
 				$this->view->feed->load(loadDetails: true);
@@ -364,6 +378,8 @@ class FreshRSS_feed_Controller extends FreshRSS_ActionController {
 			} catch (Exception) {
 				$this->view->load_ok = false;
 			}
+			// Submit the original URL when the hook changed it, so the POST request does not transform it twice.
+			$this->view->urlToAdd = $urlHooked === $url ? $this->view->feed->url() : $url;
 
 			$feed = $feedDAO->searchByUrl($this->view->feed->url());
 			if ($feed !== null) {
